@@ -5,7 +5,8 @@ import json
 import pymysql
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
-from elasticsearch import Elasticsearch, helpers
+from opensearchpy import OpenSearch
+from opensearchpy.helpers import bulk
 
 load_dotenv()
 # 환경 변수 설정, 정보 없다면 local DB로 연결
@@ -32,12 +33,11 @@ SessionLocal = scoped_session(sessionmaker(bind=engine, autocommit=False, autofl
 
 # Elasticsearch 설정
 ES_HOST = os.getenv("ES_HOST")
-ES_USER = os.getenv("ES_USER")
-ES_PASSWORD = os.getenv("ES_PASSWORD")
 
-es = Elasticsearch(
-    [ES_HOST],
-    basic_auth=(ES_USER, ES_PASSWORD)  # 기본 인증 추가
+es = OpenSearch(
+    hosts=[{"host": ES_HOST, "port": 443}],
+    use_ssl=True,
+    verify_certs=True
 )
 
 ES_INDEX = "news_index"
@@ -149,7 +149,7 @@ def save_news(news_data):
         print(f"[info] 뉴스 저장 완료 (news_id={news_id})")
 
         # Elasticsearch에 저장
-        es.index(index=ES_INDEX, id=news_id, document={
+        es.index(index=ES_INDEX, id=news_id, body={
             "title": news_data["title"],
             "content": news_data["content"]
         })
@@ -195,7 +195,7 @@ def sync_mysql_to_elasticsearch():
                     }
                 }
 
-        helpers.bulk(es, generate_bulk_data())
+        bulk(es, generate_bulk_data())
 
         print(f"[info] MySQL → Elasticsearch 동기화 완료! ({len(news_data)}건)")
     except Exception as e:
